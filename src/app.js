@@ -1,10 +1,16 @@
 var UI = require('ui');
 var ajax = require('ajax');
 
-var clientId='';
-var clientSecret='';
-var auth_code = '';
+var clientId=''; // put the Azure app id here
+var clientSecret=''; // put the Azure app secret here
+var auth_code = ''; // put the auth_code here
 
+// auth_code was retrieved manually from the following URL:
+// https://login.microsoftonline.com/common/oauth2/authorize?api-version=beta&response_type=code&client_id=your-client-id-goes-here&redirect_uri=your-redirect-url-goes-here&resource=https://graph.microsoft.com&prompt=login
+// this is because you cannot authenticate directly on the watch as it doesn't have browser as such
+// there is a way to do it through configuration page, but we decided to skip this step because of time shortage
+
+// get access token
 ajax({
         url: 'https://login.microsoftonline.com/common/oauth2/token?api-version=beta',
         method: 'POST',
@@ -26,6 +32,8 @@ function authorizedCallback(data)
     var dataObj = JSON.parse(data);
     access_token = dataObj.access_token;
     console.log("returned: " + data);
+    
+    // get list of notebooks
     ajax(
       {
         url: 'https://graph.microsoft.com/beta/me/notes/notebooks',
@@ -44,6 +52,7 @@ function notebooksRequestSuccess(data)
 {
     console.log("notebooks data: " + data);
     var dataObj = JSON.parse(data);
+
     var notebooks_menu = [];
     var notebooks_ids = [];
     for (var i=0;i<dataObj.value.length;i++)
@@ -67,6 +76,7 @@ function notebooksRequestSuccess(data)
         notebook_id = notebooks_ids[e.itemIndex];
         notebook_title = e.item.title;
         
+        // get sections of the selected notebook
         ajax(
           {
             url: 'https://graph.microsoft.com/beta/me/notes/notebooks/' + notebook_id + '/sections',
@@ -80,7 +90,6 @@ function notebooksRequestSuccess(data)
     });
         
     menu.show();
-    
 }
 
 var section_id = '';
@@ -108,9 +117,9 @@ function sectionsRequestSuccess(data)
     });
     
     menu.on('select', function(e) {
-        console.log('selected section!');
-        console.log(e);
         section_id = sections_ids[e.itemIndex];
+        
+        // get pages of the section
         ajax(
           {
             url: 'https://graph.microsoft.com/beta/me/notes/sections/' + section_id + '/pages',
@@ -136,13 +145,16 @@ function pagesRequestSuccess(data)
     var pages_ids = [];
     for (var i=0;i<dataObj.value.length;i++)
     {
+        if (!dataObj.value[i].title)
+            continue;
+        
         pages_menu.push({
             title: dataObj.value[i].title
         });
         
         pages_ids.push(dataObj.value[i].id);
     }
-    var menu = new UI.Menu({
+    var menu2 = new UI.Menu({
         sections: [
             {
                 title: 'Pages',
@@ -151,11 +163,10 @@ function pagesRequestSuccess(data)
         ]
     });
 
-    
-    menu.on('select', function(e) {
-        console.log('selected section!');
-        console.log(e);
+    menu2.on('select', function(e) {
         page_id = pages_ids[e.itemIndex];
+        
+        // get contents of the page
         ajax(
           {
             url: 'https://graph.microsoft.com/beta/me/notes/pages/' + page_id + '/content',
@@ -168,23 +179,21 @@ function pagesRequestSuccess(data)
         );
     });
         
-    menu.show();
+    menu2.show();
     
 }
 
 function pageContentRequestSuccess(data)
 {
-    console.log('page content callback!!!');
     var text = data.replace(/<(?:.|\n)*?>/gm, '');
+    text = text.replace(/ [ ]+/g, '');
     console.log(text);
     
-    var main = new UI.Card({
+    var card = new UI.Card({
         title: 'Page content',
-        icon: 'images/menu_icon.png',
-        body: text,
-        scrollable: true
+        body: text
     });
-    main.show();
+    card.show();
 
 }
 
@@ -192,7 +201,6 @@ function errorCallback()
 {
     var main = new UI.Card({
         title: 'Error',
-        icon: 'images/menu_icon.png',
         body: JSON.stringify(arguments),
         scrollable: true
     });
