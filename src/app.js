@@ -1,30 +1,45 @@
 var UI = require('ui');
 var ajax = require('ajax');
+var Settings = require('settings');
 
-var clientId=''; // put the Azure app id here
-var clientSecret=''; // put the Azure app secret here
-var auth_code = ''; // put the auth_code here
+var appUrl = 'http://markeev.com/pebble/onenote.html';
+var auth_code = Settings.option('auth_code');
+var clientId='127482e0-2e1a-4e80-9b81-8a13f9fb822c'; // Azure app id
+var clientSecret=''; // Azure app secret
 
-// auth_code was retrieved manually from the following URL:
-// https://login.microsoftonline.com/common/oauth2/authorize?api-version=beta&response_type=code&client_id=your-client-id-goes-here&redirect_uri=your-redirect-url-goes-here&resource=https://graph.microsoft.com&prompt=login
-// this is because you cannot authenticate directly on the watch as it doesn't have browser as such
-// there is a way to do it through configuration page, but we decided to skip this step because of time shortage
+Settings.config({ url: appUrl }, function() {
+    retrieveNotebooks();
+    auth_code = Settings.option('auth_code');
+});
 
-// get access token
-ajax({
-        url: 'https://login.microsoftonline.com/common/oauth2/token?api-version=beta',
-        method: 'POST',
-        data: {
-            grant_type: 'authorization_code',
-            code: auth_code,
-            redirect_uri: 'http://markeev.com/pebble/onenote.html',
-            client_id: clientId,
-            client_secret: clientSecret
-        }
-    },
-    authorizedCallback,
-    errorCallback
-);
+if (!auth_code)
+{
+    errorCallback('Account is not configured. Please visit settings.');
+    Pebble.openURL(appUrl);
+    return;
+}
+else
+    retrieveNotebooks();
+
+function retrieveNotebooks()
+{
+    // get access token
+    ajax({
+            url: 'https://login.microsoftonline.com/common/oauth2/token?api-version=beta',
+            method: 'POST',
+            data: {
+                grant_type: 'authorization_code',
+                code: auth_code,
+                redirect_uri: appUrl,
+                client_id: clientId,
+                client_secret: clientSecret
+            }
+        },
+        authorizedCallback,
+        errorCallback
+    );
+    
+}
 
 var access_token = '';
 function authorizedCallback(data)
@@ -185,13 +200,15 @@ function pagesRequestSuccess(data)
 
 function pageContentRequestSuccess(data)
 {
-    var text = data.replace(/<(?:.|\n)*?>/gm, '');
-    text = text.replace(/ [ ]+/g, '');
-    console.log(text);
+    var titleMatch = data.match(/<title>([^<]*)<\/title>/);
+    var title = titleMatch.length > 1 ? titleMatch[1] : '';
+    console.log(data);
+    var text = data.replace(/<title>([^<]*)<\/title>/, '').replace(/<(?:.|\n)*?>/gm, '').replace(/\s+/g, ' ');
     
     var card = new UI.Card({
-        title: 'Page content',
-        body: text
+        title: title || 'Untitled page',
+        body: text,
+        scrollable: true
     });
     card.show();
 

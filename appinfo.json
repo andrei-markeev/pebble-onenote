@@ -1,10 +1,10 @@
 {
     "appKeys": {},
     "capabilities": [
-        ""
+        "configurable"
     ],
     "companyName": "omlin@yandex.ru",
-    "longName": "onenote",
+    "longName": "Notes 365",
     "projectType": "pebblejs",
     "resources": {
         "media": [
@@ -32,7 +32,7 @@
         ]
     },
     "sdkVersion": "3",
-    "shortName": "onenote",
+    "shortName": "Notes 365",
     "targetPlatforms": [
         "aplite",
         "basalt"
