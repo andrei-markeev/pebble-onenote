@@ -8,8 +8,9 @@ var clientId='127482e0-2e1a-4e80-9b81-8a13f9fb822c'; // Azure app id
 var clientSecret=''; // Azure app secret
 
 Settings.config({ url: appUrl }, function() {
-    retrieveNotebooks();
     auth_code = Settings.option('auth_code');
+    localStorage.removeItem('refresh_token');
+    retrieveNotebooks();
 });
 
 if (!auth_code)
@@ -23,7 +24,33 @@ else
 
 function retrieveNotebooks()
 {
-    // get access token
+  if (localStorage.getItem('refresh_token') !== null)
+    authWithRefreshToken();
+  else
+    authWithAccessCode();    
+   
+}
+
+function authWithRefreshToken()
+{
+    ajax({
+            url: 'https://login.microsoftonline.com/common/oauth2/token?api-version=beta',
+            method: 'POST',
+            data: {
+                grant_type: 'refresh_token',
+                refresh_token: localStorage.getItem('refresh_token'),
+                redirect_uri: appUrl,
+                client_id: clientId,
+                client_secret: clientSecret
+            }
+        },
+        authorizedCallback,
+        errorCallback
+    );
+}
+
+function authWithAccessCode()
+{
     ajax({
             url: 'https://login.microsoftonline.com/common/oauth2/token?api-version=beta',
             method: 'POST',
@@ -38,7 +65,6 @@ function retrieveNotebooks()
         authorizedCallback,
         errorCallback
     );
-    
 }
 
 var access_token = '';
@@ -46,6 +72,8 @@ function authorizedCallback(data)
 {
     var dataObj = JSON.parse(data);
     access_token = dataObj.access_token;
+    var refresh_token = dataObj.refresh_token;
+    localStorage.setItem('refresh_token', refresh_token);
     console.log("returned: " + data);
     
     // get list of notebooks
