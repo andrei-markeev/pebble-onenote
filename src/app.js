@@ -53,7 +53,7 @@ function authWithRefreshToken()
 
 
     ajax({
-            url: 'https://login.microsoftonline.com/common/oauth2/token?api-version=beta',
+            url: auth_url,
             method: 'POST',
             data: {
                 grant_type: 'refresh_token',
@@ -157,7 +157,7 @@ function pageSelected(e, id)
     // get contents of the page
     ajax(
         {
-            url: baseApiUrl + '/beta/me/notes/pages/' + page_id + '/content',
+            url: baseApiUrl + '/me/notes/pages/' + page_id + '/content',
             headers: { "Authorization": "Bearer " + access_token }
         },
         pageContentRequestSuccess,
