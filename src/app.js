@@ -1,6 +1,7 @@
 var UI = require('ui');
 var ajax = require('ajax');
 var Settings = require('settings');
+var Vector2 = require('vector2');
 
 var appUrl = 'http://markeev.com/pebble/onenote.html';
 
@@ -17,7 +18,7 @@ Settings.config({ url: appUrl }, function() {
 
 if (!Settings.option('auth_code'))
 {
-    showText('Account is not configured. Please visit settings.');
+    showText('Account is not configured. Please visit app settings on phone.');
     Pebble.openURL(appUrl);
     return;
 }
@@ -29,12 +30,12 @@ function retrieveNotebooks()
   var account_type = Settings.option('account_type');
     
   if (account_type == 'onenote.com') {
-      clientId = '000000004818A9A6';
-      clientSecret = '';
+      clientId = '000000004818A9A6'; // Live app id (https://account.live.com/developers/applications/index)
+      clientSecret = ''; // Live app secret
       auth_url = 'https://login.live.com/oauth20_token.srf';
       baseApiUrl = 'https://www.onenote.com/api/v1.0/';
   } else {
-      clientId='127482e0-2e1a-4e80-9b81-8a13f9fb822c'; // Azure app id
+      clientId='127482e0-2e1a-4e80-9b81-8a13f9fb822c'; // Azure app id (https://manage.windowsazure.com/)
       clientSecret=''; // Azure app secret
       auth_url = 'https://login.microsoftonline.com/common/oauth2/token?api-version=beta';
       baseApiUrl = 'https://graph.microsoft.com/beta/';
@@ -168,18 +169,88 @@ function pageSelected(e, id)
 
 function pageContentRequestSuccess(data)
 {
-    var titleMatch = data.match(/<title>([^<]*)<\/title>/);
-    var title = titleMatch.length > 1 ? titleMatch[1] : '';
-    console.log(data);
-    var text = data.replace(/<title>([^<]*)<\/title>/, '').replace(/<(?:.|\n)*?>/gm, '').replace(/\s+/g, ' ');
+    var pageFontSize = Settings.option('font_size') || 24;
     
-    var card = new UI.Card({
-        title: title || 'Untitled page',
-        body: text,
-        scrollable: true
+    console.log(data);
+    var title;
+    var text = data.replace(/<title>([^<]*)<\/title>/, function(m) { title = m.replace(/<(?:.|\n)*?>/gm, ''); return ''; });
+    
+    var listItems = [];
+    text = text.replace(/<li>(.*?)<\/li>/g, function(m) {
+        listItems.push({ 
+            text: decodeHTMLEntities(m.replace(/<(?:.|\n)*?>/gm, '').replace(/\s+/g, ' ')),
+            tag: m.match(/data\-tag="([A-Za-z,:\-]+)"/)[1]
+        });
+        return '[listItem]';
     });
-    card.show();
 
+    console.log(JSON.stringify(listItems));
+    
+    text = text.replace(/<(br \/|p|\/p|li)>/gm, '[br]');
+    text = text.replace(/<(?:.|\n)*?>/gm, '').replace(/\s+/g, ' ').replace(/\[br\]/g,'\n');
+    text = decodeHTMLEntities(text);
+
+    var page = new UI.Window({
+      backgroundColor: 'white',
+      scrollable: true
+    });
+    
+    var yPos = 0;
+    var titleSize = sizeVector(title, pageFontSize);
+    var titleText = new UI.Text({ position: new Vector2(0, yPos), size: titleSize, text: title, textAlign: 'center', textOverflow: 'wrap', color: 'black', font: 'gothic-' + pageFontSize + '-bold' });
+    page.add(titleText);
+    yPos += titleSize.y + 5;
+
+    var texts = text.split('[listItem]');
+    while (texts.length > 0)
+    {
+        var fragmentText = texts.shift();
+        
+        if (fragmentText.replace(/[\s\n]+/g,'') !== '') {
+            var fragmentSize = sizeVector(fragmentText, pageFontSize);
+            var fragmentElement = new UI.Text({ position: new Vector2(4, yPos), size: fragmentSize, text: fragmentText, textAlign: 'left', textOverflow: 'wrap', color: 'black', font: 'gothic-' + pageFontSize });
+            page.add(fragmentElement);
+            yPos += fragmentSize.y + 2;
+        }
+
+        if (listItems.length > 0) {
+            var listItem = listItems.shift();
+            var isTodo = listItem.tag.indexOf('to-do') != -1;
+            if (isTodo) {
+                page.add(new UI.Rect({ position: new Vector2(2, yPos + 4), size: new Vector2(16, 16), borderColor: 'black' }));
+                page.add(new UI.Rect({ position: new Vector2(3, yPos + 5), size: new Vector2(14, 14), borderColor: 'black' }));
+                if (listItem.tag.indexOf('to-do:completed') != -1) {
+                    console.log('adding the checkmark image');
+                    page.add(new UI.Image({ position: new Vector2(5, yPos + 7), size: new Vector2(11, 11), image: 'images/check.bmp' }));
+                }
+            }
+            var listItemSize = sizeVector(listItem.text, pageFontSize, isTodo ? 20 : 0);
+            var listItemElement = new UI.Text({ position: new Vector2(isTodo ? 24 : 4, yPos), size: listItemSize, text: listItem.text, textAlign: 'left', textOverflow: 'wrap', color: 'black', font: 'gothic-' + pageFontSize });
+            page.add(listItemElement);
+            yPos += listItemSize.y + 2;
+        }
+    }
+    
+    page.show();
+}
+
+function decodeHTMLEntities(text) {
+    var entities = [
+        ['apos', '\''],
+        ['amp', '&'],
+        ['lt', '<'],
+        ['gt', '>']
+    ];
+
+    for (var i = 0, max = entities.length; i < max; ++i) 
+        text = text.replace(new RegExp('&'+entities[i][0]+';', 'g'), entities[i][1]);
+
+    text = text.replace(/&#([0-9]{1,5});/gi, function(match, numStr) {
+        var num = parseInt(numStr, 10); // read num as normal number
+        return String.fromCharCode(num);
+    });
+    
+    return text;
 }
 
 function showMenu(title, data, title_property, select_callback)
@@ -233,4 +304,44 @@ function showText(text)
     });
     main.show();
     
+}
+
+function strTruncate(string, width) {
+    if (string.length >= width) {
+        var result = string[width - 1] === ' ' ? string.substr(0, width - 1) : string.substr(0, string.substr(0, width).lastIndexOf(' '));
+        if (result.length === 0)
+            result = string.substr(0, width - 1);
+        return result;
+    }
+    return string;
+}
+
+function strTruncateWhole(string, width) {
+    var arr = [];
+    var b = 0;
+    while (b < string.length) {
+        arr.push(strTruncate(string.substring(b), width));
+        b += arr[arr.length - 1].length;
+    }
+    return arr;
+}
+
+function sizeVector(string, fontSize, substractWidth) {
+    var width = 136 - (substractWidth || 0);
+    var charsPerLine;
+    if (fontSize==14)
+        charsPerLine = width / 5;
+    else if (fontSize==18)
+        charsPerLine = width / 6;
+    else if (fontSize==24)
+        charsPerLine = width / 7;
+    var lines = string.split('\n');
+    var height = 0;
+    while (lines.length)
+    {
+        var split = strTruncateWhole(lines.shift(), charsPerLine);
+        height += split.length * fontSize;
+    }
+    console.log('return vector: ' + width + 'x' + height);
+    return new Vector2(width, height);
 }
