@@ -45,11 +45,12 @@
     "shortName": "Notes 365",
     "targetPlatforms": [
         "aplite",
-        "basalt"
+        "basalt",
+        "chalk"
     ],
     "uuid": "32e32598-5ecb-400f-bb93-562d4dd8d78c",
     "versionCode": 1,
-    "versionLabel": "1.3",
+    "versionLabel": "1.7",
     "watchapp": {
         "hiddenApp": false,
         "watchface": false
