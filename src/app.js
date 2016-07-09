@@ -177,15 +177,85 @@ function pageContentRequestSuccess(data)
     var text = data.replace(/<title>([^<]*)<\/title>/, function(m) { title = m.replace(/<(?:.|\n)*?>/gm, ''); return ''; });
     
     if (Feature.round()) {
-        console.log(htmlToText(text));
+        // simplified support for Pebble Round
         new UI.Card({
             title: title,
             body: htmlToText(text),
             scrollable: true
         }).show();
+    }
+    else {
+        var page = new UI.Window({
+          backgroundColor: 'white',
+          scrollable: true,
+          
+        });
+        
+        var yPos = addTextToWindow(page, 0, 0, title, pageFontSize) + 2;
+    
+        var items = parseHtmlTree(text);
+        console.log(JSON.stringify(items[0], null, 4));
+        showItem(items[0], page, pageFontSize, yPos);
+        
+        page.show();
+    }
+}
+
+
+function showMenu(title, data, title_property, select_callback)
+{
+    var dataObj = JSON.parse(data);
+    
+    if (dataObj.value.length === 0) {
+        showText(title + ' not found.');
         return;
     }
+
+    var menuitems = [];
+    var ids = [];
+    for (var i=0;i<dataObj.value.length;i++)
+    {
+        menuitems.push({
+            title: dataObj.value[i][title_property] || '(untitled)'
+        });
+        
+        ids.push(dataObj.value[i].id);
+    }
+    var menu = new UI.Menu({
+        sections: [
+            {
+                title: title,
+                items: menuitems
+            }
+        ]
+    });
     
+    menu.on('select', function(e) { select_callback(e, ids[e.itemIndex]); });
+    menu.show();
+}
+
+function showError()
+{
+    var main = new UI.Card({
+        title: 'Error',
+        body: JSON.stringify(arguments),
+        scrollable: true
+    });
+    main.show();
+}
+
+function showText(text)
+{
+    var main = new UI.Card({
+        body: text,
+        scrollable: true
+    });
+    main.show();
+    
+}
+
+
+function parseHtmlTree(text) {
     var items = [];
     var listTypes = [];
     var listCounters = [];
@@ -245,18 +315,8 @@ function pageContentRequestSuccess(data)
         openedListItems.push(newListItem);
         return m;
     });
-        
-    var page = new UI.Window({
-      backgroundColor: 'white',
-      scrollable: true,
-      
-    });
     
-    var yPos = addTextToWindow(page, 0, 0, title, pageFontSize) + 2;
-    console.log(JSON.stringify(items[0], null, 4));
-    showItem(items[0], page, pageFontSize, yPos);
-    
-    page.show();
+    return items;
 }
 
 function showItem(item, page, pageFontSize, yPos)
@@ -323,57 +383,77 @@ function decodeHTMLEntities(text) {
     return text;
 }
 
-function showMenu(title, data, title_property, select_callback)
+function addTextToWindow(window, xPos, yPos, text, pageFontSize)
 {
-    console.log("data received: " + data);
-    var dataObj = JSON.parse(data);
-    
-    if (dataObj.value.length === 0) {
-        showText(title + ' not found.');
-        return;
-    }
+    do {
+        var result = truncateAndCalculateSize(text, pageFontSize, xPos);
+        var fragmentSize = result[0];
+        var fragmentText = result[1];
+        text = result[2];
+        var fragmentElement = new UI.Text({ position: new Vector2(xPos, yPos), size: fragmentSize, text: fragmentText, textAlign: 'left', textOverflow: 'wrap', color: 'black', font: 'gothic-' + pageFontSize });
+        window.add(fragmentElement);
+        console.log('--- text element added at ' + xPos + ':' + yPos + ' ---');
+        yPos += fragmentSize.y;
+    } while (text);
+    return yPos;
+}
 
-    var menuitems = [];
-    var ids = [];
-    for (var i=0;i<dataObj.value.length;i++)
+function truncateAndCalculateSize(string, fontSize, substractWidth) {
+    var width = 144 - (substractWidth || 0);
+    var lines = string.split('\n');
+    var rowsLeft = 30;
+    var height = 0;
+    var result = '';
+    var restOfText = '';
+    while (lines.length)
     {
-        menuitems.push({
-            title: dataObj.value[i][title_property] || '(untitled)'
-        });
+        var paragraph = lines.shift();
+        var split = strTruncateWhole(paragraph, fontSize, width);
+        if (rowsLeft <= split.length)
+        {
+            result += split.slice(0,rowsLeft).join('');
+            restOfText = split.slice(rowsLeft).join('') + '\n' + lines.join('\n');
+            return [new Vector2(width, height + 3), result, restOfText];
+        }
         
-        ids.push(dataObj.value[i].id);
+        rowsLeft -= split.length;
+        height += split.length * fontSize;
+        result += paragraph + '\n';
     }
-    var menu = new UI.Menu({
-        sections: [
-            {
-                title: title,
-                items: menuitems
-            }
-        ]
-    });
-    
-    menu.on('select', function(e) { select_callback(e, ids[e.itemIndex]); });
-    menu.show();
+
+    return [new Vector2(width, height + 3), string, ''];
 }
 
-function showError()
-{
-    var main = new UI.Card({
-        title: 'Error',
-        body: JSON.stringify(arguments),
-        scrollable: true
-    });
-    main.show();
+
+function strTruncate(string, fontSize, width) {
+    var len = 0;
+    var i = 0;
+    while (len <= width && i < string.length - 1) {
+        len += getCharWidth(string.substr(i, 1), fontSize);
+        i++;
+    }
+    if (len > width) {
+        if (len - width > 2)
+            i--;
+        var result = string.substr(0, i);
+        var wrappablePos = Math.max(result.lastIndexOf(' '), result.lastIndexOf('-'));
+        if (string.length > i && string.substr(i, 1) != ' ' && wrappablePos > 0)
+            result = string.substr(0, wrappablePos);
+
+        console.log('strTruncate: ' + result + ' -> ' + len + ' : ' + i);
+        return result;
+    }
+    return string;
 }
 
-function showText(text)
-{
-    var main = new UI.Card({
-        body: text,
-        scrollable: true
-    });
-    main.show();
-    
+function strTruncateWhole(string, fontSize, width) {
+    var arr = [];
+    var b = 0;
+    while (b < string.length) {
+        arr.push(strTruncate(string.substring(b), fontSize, width));
+        b += arr[arr.length - 1].length;
+    }
+    return arr;
 }
 
 function getCharWidth(ch, fontSize) {
@@ -439,74 +519,3 @@ function getCharWidth(ch, fontSize) {
     return 8;
 }
 
-function strTruncate(string, fontSize, width) {
-    var len = 0;
-    var i = 0;
-    while (len <= width && i < string.length - 1) {
-        len += getCharWidth(string.substr(i, 1), fontSize);
-        i++;
-    }
-    if (len > width) {
-        if (len - width > 2)
-            i--;
-        var result = string.substr(0, i);
-        var wrappablePos = Math.max(result.lastIndexOf(' '), result.lastIndexOf('-'));
-        if (string.length > i && string.substr(i, 1) != ' ' && wrappablePos > 0)
-            result = string.substr(0, wrappablePos);
-
-        console.log('strTruncate: ' + result + ' -> ' + len + ' : ' + i);
-        return result;
-    }
-    return string;
-}
-
-function strTruncateWhole(string, fontSize, width) {
-    var arr = [];
-    var b = 0;
-    while (b < string.length) {
-        arr.push(strTruncate(string.substring(b), fontSize, width));
-        b += arr[arr.length - 1].length;
-    }
-    return arr;
-}
-
-function truncateAndCalculateSize(string, fontSize, substractWidth) {
-    var width = 144 - (substractWidth || 0);
-    var lines = string.split('\n');
-    var rowsLeft = 30;
-    var height = 0;
-    var result = '';
-    var restOfText = '';
-    while (lines.length)
-    {
-        var paragraph = lines.shift();
-        var split = strTruncateWhole(paragraph, fontSize, width);
-        if (rowsLeft <= split.length)
-        {
-            result += split.slice(0,rowsLeft).join('');
-            restOfText = split.slice(rowsLeft).join('') + '\n' + lines.join('\n');
-            return [new Vector2(width, height + 3), result, restOfText];
-        }
-        
-        rowsLeft -= split.length;
-        height += split.length * fontSize;
-        result += paragraph + '\n';
-    }
-
-    return [new Vector2(width, height + 3), string, ''];
-}
-
-function addTextToWindow(window, xPos, yPos, text, pageFontSize)
-{
-    do {
-        var result = truncateAndCalculateSize(text, pageFontSize, xPos);
-        var fragmentSize = result[0];
-        var fragmentText = result[1];
-        text = result[2];
-        var fragmentElement = new UI.Text({ position: new Vector2(xPos, yPos), size: fragmentSize, text: fragmentText, textAlign: 'left', textOverflow: 'wrap', color: 'black', font: 'gothic-' + pageFontSize });
-        window.add(fragmentElement);
-        console.log('--- text element added at ' + xPos + ':' + yPos + ' ---');
-        yPos += fragmentSize.y;
-    } while (text);
-    return yPos;
-}
