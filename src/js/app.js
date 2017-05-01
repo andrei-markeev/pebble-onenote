@@ -4,7 +4,7 @@ var Settings = require('settings');
 var Vector2 = require('vector2');
 var Feature = require('platform/feature');
 
-var appUrl = 'http://markeev.com/pebble/onenote.html';
+var appUrl = 'https://markeev.com/pebble/onenote.html';
 
 var auth_url = '';
 var baseApiUrl = '';
