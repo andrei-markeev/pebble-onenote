@@ -4,12 +4,12 @@ var Settings = require('settings');
 var Vector2 = require('vector2');
 var Feature = require('platform/feature');
 
-var appUrl = 'https://markeev.com/pebble/onenote.html';
-
-var auth_url = '';
-var baseApiUrl = '';
-var clientId='';
+var appUrl = 'https://markeev.com/pebble/onenote_v2.html';
+var scope = 'offline_access https://graph.microsoft.com/.default';
+var clientId='127482e0-2e1a-4e80-9b81-8a13f9fb822c';
 var clientSecret='';
+var auth_url = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+var baseApiUrl = 'https://graph.microsoft.com/v1.0';
 
 Settings.config({ url: appUrl }, function() {
     localStorage.removeItem('refresh_token');
@@ -28,37 +28,22 @@ else
 
 function retrieveNotebooks()
 {
-  var account_type = Settings.option('account_type');
-    
-  if (account_type == 'onenote.com') {
-      clientId = '000000004818A9A6'; // Live app id (https://account.live.com/developers/applications/index)
-      clientSecret = ''; // Live app secret
-      auth_url = 'https://login.live.com/oauth20_token.srf';
-      baseApiUrl = 'https://www.onenote.com/api/v1.0/';
-  } else {
-      clientId='127482e0-2e1a-4e80-9b81-8a13f9fb822c'; // Azure app id (https://manage.windowsazure.com/)
-      clientSecret=''; // Azure app secret
-      auth_url = 'https://login.microsoftonline.com/common/oauth2/token?api-version=beta';
-      baseApiUrl = 'https://graph.microsoft.com/beta/';
-  }
-
   if (localStorage.getItem('refresh_token') !== null)
     authWithRefreshToken();
   else
-    authWithAccessCode();
-   
+    authWithAccessCode();  
 }
 
 function authWithRefreshToken()
 {
     console.log('Auth with refresh token');
 
-
     ajax({
             url: auth_url,
             method: 'POST',
             data: {
                 grant_type: 'refresh_token',
+                scope: scope,
                 refresh_token: localStorage.getItem('refresh_token'),
                 redirect_uri: appUrl,
                 client_id: clientId,
@@ -66,7 +51,7 @@ function authWithRefreshToken()
             }
         },
         authorizedCallback,
-        showError
+        showError('authWithRefreshToken')
     );
 }
 
@@ -79,6 +64,7 @@ function authWithAccessCode()
             method: 'POST',
             data: {
                 grant_type: 'authorization_code',
+                scope: scope,
                 code: Settings.option('auth_code'),
                 redirect_uri: appUrl,
                 client_id: clientId,
@@ -86,7 +72,7 @@ function authWithAccessCode()
             }
         },
         authorizedCallback,
-        showError
+        showError('authWithAccessCode')
     );
 }
 
@@ -97,17 +83,17 @@ function authorizedCallback(data)
     access_token = dataObj.access_token;
     var refresh_token = dataObj.refresh_token;
     localStorage.setItem('refresh_token', refresh_token);
-    
+  
     // get list of notebooks
     ajax(
       {
-        url: baseApiUrl + '/me/notes/notebooks',
+        url: baseApiUrl + '/me/onenote/notebooks',
         headers: { "Authorization": "Bearer " + access_token }
       },
       function(data) {
-        showMenu('Notebooks', data, 'name', notebookSelected);
+        showMenu('Notebooks', data, 'displayName', notebookSelected);
       },
-      showError
+      showError('authorizedCallback')
     );
 }
 
@@ -121,13 +107,13 @@ function notebookSelected(e, id)
     // get sections of the selected notebook
     ajax(
         {
-            url: baseApiUrl + '/me/notes/notebooks/' + notebook_id + '/sections',
+            url: baseApiUrl + '/me/onenote/notebooks/' + notebook_id + '/sections',
             headers: { "Authorization": "Bearer " + access_token }
         },
         function(data) {
-          showMenu('Sections', data, 'name', sectionSelected);
+          showMenu('Sections', data, 'displayName', sectionSelected);
         },
-        showError
+        showError('notebookSelected')
     );
 }
 
@@ -139,13 +125,13 @@ function sectionSelected(e, id)
     // get pages of the section
     ajax(
         {
-            url: baseApiUrl + '/me/notes/sections/' + section_id + '/pages',
+            url: baseApiUrl + '/me/onenote/sections/' + section_id + '/pages',
             headers: { "Authorization": "Bearer " + access_token }
         },
         function(data) {
           showMenu('Pages', data, 'title', pageSelected);
         },
-        showError
+        showError('sectionSelected')
     );
     
 }
@@ -158,11 +144,11 @@ function pageSelected(e, id)
     // get contents of the page
     ajax(
         {
-            url: baseApiUrl + '/me/notes/pages/' + page_id + '/content',
+            url: baseApiUrl + '/me/onenote/pages/' + page_id + '/content',
             headers: { "Authorization": "Bearer " + access_token }
         },
         pageContentRequestSuccess,
-        showError
+        showError('pageSelected')
     );
     
 }
@@ -234,16 +220,19 @@ function showMenu(title, data, title_property, select_callback)
     menu.show();
 }
 
-function showError()
+function showError(funcName)
 {
-    var main = new UI.Card({
-        title: 'Error',
-        body: JSON.stringify(arguments),
-        scrollable: true
-    });
-    main.show();
+  return function(response, statusCode, request)
+  {
+      var main = new UI.Card({
+          title: 'Error @' + funcName,
+          body: response,
+          scrollable: true
+      });
+      main.show();
+  };
 }
-
+  
 function showText(text)
 {
     var main = new UI.Card({
@@ -518,4 +507,3 @@ function getCharWidth(ch, fontSize) {
     console.log('Error in getCharWidth: fontSize = ' + fontSize + ', char = ' + ch);
     return 8;
 }
-
