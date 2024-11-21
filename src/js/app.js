@@ -4,9 +4,9 @@ var Settings = require('settings');
 var Vector2 = require('vector2');
 var Feature = require('platform/feature');
 
-var appUrl = 'https://markeev.com/pebble/onenote_v2.html';
+var appUrl = 'https://markeev.com/pebble/onenote_v3';
 var scope = 'offline_access https://graph.microsoft.com/.default';
-var clientId='127482e0-2e1a-4e80-9b81-8a13f9fb822c';
+var clientId='c8581455-5588-4516-88cf-b983d157df0e';
 var clientSecret='';
 var auth_url = 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
 var baseApiUrl = 'https://graph.microsoft.com/v1.0';
